@@ -1,0 +1,75 @@
+version: '3'
+
+services:
+  redis:
+    image: redis:latest
+    restart: always
+    hostname: redis
+    networks:
+      - reverse-proxy
+  
+  weather-frontend:
+    # build: ./frontend
+    image: cagodoy/acid-frontend:0.0.8
+    hostname: weather-frontend
+    restart: always
+    depends_on:
+      - weather-backend
+    # ports:
+      # - 8000:8000 #should use traefik rule
+    networks:
+      - reverse-proxy
+    labels:
+      - "traefik.port=8000"
+      - "traefik.enable=true"
+      - "traefik.frontend=weather-frontend" #check this -> "traefik.backend=weather-frontend"
+      - "traefik.frontend.entryPoints=http,https"
+      - "traefik.frontend.rule=Host:weather-frontend.localhost"
+    environment:
+      REACT_APP_API_URL: http://weather-backend.localhost/api
+      REACT_APP_GOOGLE_MAP_API_KEY: AIzaSyCpw-ITSec2Rq0sJVBcAqwey4x4kB4bSwM
+
+  weather-backend:
+    # build: ./backend
+    image: cagodoy/acid-backend:0.0.4
+    hostname: weather-backend
+    restart: always
+    depends_on:
+      - redis
+    # ports:
+      # - 3000:3000 #should use traefik rule
+    networks:
+      - reverse-proxy
+    labels:
+      - "traefik.port=3000"
+      - "traefik.enable=true"
+      - "traefik.backend=weather-backend"
+      - "traefik.frontend.entryPoints=http,https"
+      - "traefik.frontend.rule=Host:weather-backend.localhost"
+    environment:
+      DARKSKY_API_KEY: b0e1da478f80a5ca21e9aea95b031545
+      DARKSKY_API_URL: https://api.darksky.net/forecast
+      REDIS_PORT: 6379
+      REDIS_HOST: redis
+      REDIS_EXPIRATION_SECONDS: 3600
+      GEOCODE_API_URL: https://maps.googleapis.com/maps/api/geocode/json
+      GEOCODE_API_KEY: AIzaSyA-vkodvDFjpoRupkNSVpEQnLhAoBNP4x4
+      RESTCOUNTRIES_API_URL: https://restcountries.eu/rest/v2
+  
+  reverse-proxy:
+    image: traefik
+    command: --api --docker
+    ports:
+      - 80:80
+      - 443:443
+      - 8080:8080
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    labels:
+      - "traefik.frontend.rule=Host:dashboard.localhost"
+      - "traefik.port=8080"
+    networks:
+      - reverse-proxy
+
+networks:
+  reverse-proxy:
